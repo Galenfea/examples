@@ -341,3 +341,60 @@ class UserSuperAdmin(SuperAdminClient):
             f"{self.first_name or ''} {self.last_name or ''}".strip()
             or NO_FIRST_LAST_NAMES
         )
+
+
+#---------------Example from another class---------------
+
+    def _create_superadmin(
+        self, superadmin_type: str
+    ) -> SuperAdminClient | None:
+        base_args = {
+            "thread_index": self.ADMIN_INDEX,
+            "threads_info": self.threads_info,
+        }
+        if superadmin_type == self.SUPERADMIN_TYPE["BOT"]:
+            superadmin_class = BotSuperAdmin
+            specific_args = {
+                "bot_token": self.superadmin_bot_token,
+                "used_bot_tokens": self.used_bot_tokens,
+            }
+        elif superadmin_type == self.SUPERADMIN_TYPE["USER"]:
+            superadmin_class = UserSuperAdmin
+            specific_args = {
+                "phone": self.superadmin_account,
+                "source_folder": self.source_folder,
+            }
+        else:
+            logger.critical(
+                f"thread {self.ADMIN_INDEX}| "
+                "Указан некорректный тип суперадмина."
+            )
+            return None
+        init_args = {**base_args, **specific_args}
+        logger.debug(f"SuperAdmin| Запускаем суперадмина {superadmin_type}")
+        try:
+            superadmin = superadmin_class(**init_args)
+        except Exception as e:
+            logger.error(
+                f"thread {self.ADMIN_INDEX}| "
+                f"starting _client for {superadmin_type}: "
+                f"{type(e).__name__}: {e}"
+            )
+            self.disconnect_user_superadmin(superadmin)
+            self.superadmin_exception = (
+                f"Ошибка создания {superadmin_type}-суперадминистратора.\n"
+                f"{type(e).__name__}: {e}"
+            )
+            return None
+
+        if not superadmin.run_client():
+            logger.error(
+                f"{self.ADMIN_INDEX}| "
+                f"SuperAdminError main_{superadmin_type}.run_client."
+            )
+            self.superadmin_exception = (
+                f"Ошибка запуска {superadmin_type}-суперадминистратора\n"
+            )
+            return None
+
+        return superadmin
